@@ -103,6 +103,7 @@ def export_pdf(points, rect, titre="Rectangle englobant"):
 
 # --- Interface Streamlit ---
 def main():
+    st.set_page_config(page_title="Rectangle Englobant", page_icon="📐")
     st.title("📐 Calcul du rectangle englobant")
     forme = st.selectbox("Choisir une forme :", [
         "Losange (côté + angle)",
@@ -157,4 +158,4 @@ if __name__ == "__main__":
 
 
 
-#python -m streamlit run rectangle_englobant_app.py
+#python -m streamlit run Home.py

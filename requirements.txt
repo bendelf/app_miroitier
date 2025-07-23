@@ -5,5 +5,6 @@ reportlab
 numpy
 ezdxf
 tempfile
+io
 os
 math

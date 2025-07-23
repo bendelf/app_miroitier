@@ -2,3 +2,8 @@ streamlit
 shapely
 matplotlib
 reportlab
+numpy
+ezdxf
+tempfile
+os
+math

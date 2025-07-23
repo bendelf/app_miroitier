@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 import io
+import ezdxf
+import tempfile
+import os
 
 # --- Fonctions de formes géométriques ---
 def losange_points_cote_angle(cote, angle_deg):
@@ -25,6 +28,64 @@ def parallelogramme_points(base, cote, angle_deg):
     dx = cote * math.cos(angle_rad)
     dy = cote * math.sin(angle_rad)
     return [(0, 0), (base, 0), (base + dx, dy), (dx, dy)]
+
+
+def construire_quadrilatere_ab_parallele_cd(ab, bc, cd, da, angle_a_deg, angle_b_deg):
+    """Construit un quadrilatère avec AB ‖ CD et vérifie la fermeture."""
+    A = (0, 0)
+    B = (ab, 0)
+
+    angle_a_rad = math.radians(180 - angle_a_deg)
+    angle_b_rad = math.radians(180 - angle_b_deg)
+
+    Dx = A[0] - da * math.cos(angle_a_rad)
+    Dy = A[1] + da * math.sin(angle_a_rad)
+    D = (Dx, Dy)
+
+    Cx = B[0] + bc * math.cos(angle_b_rad)
+    Cy = B[1] + bc * math.sin(angle_b_rad)
+    C = (Cx, Cy)
+
+    # Repositionne C pour que CD soit parallèle à AB (horizontal)
+    Cx_corrected = Dx + cd
+    Cy_corrected = Dy
+    C_corrected = (Cx_corrected, Cy_corrected)
+
+    ecart = math.hypot(C_corrected[0] - C[0], C_corrected[1] - C[1])
+    ferme = ecart < 0.9
+
+    return [A, B, C_corrected, D], ferme, ecart
+
+def construire_quadrilatere_general(ab, bc, cd, da, angle_a_deg, angle_b_deg):
+    """
+    Construit un quadrilatère général (non parallèle) défini par :
+    - longueurs : AB, BC, CD, DA
+    - angles intérieurs : angle_A (entre DA et AB), angle_B (entre AB et BC)
+    """
+    A = (0, 0)
+    B = (ab, 0)
+
+    angle_a_rad = math.radians(180 - angle_a_deg)
+    angle_b_rad = math.radians(180 - angle_b_deg)
+
+    # Point D à partir de A et DA orienté à pi - angle_A
+    D = (
+        A[0] + da * math.cos(math.pi - angle_a_rad),
+        A[1] + da * math.sin(math.pi - angle_a_rad)
+    )
+
+    # Point C à partir de B et BC orienté à angle_B
+    C = (
+        B[0] + bc * math.cos(angle_b_rad),
+        B[1] + bc * math.sin(angle_b_rad)
+    )
+
+    # Vérification de fermeture
+    cd_calc = math.hypot(C[0] - D[0], C[1] - D[1])
+    ecart = abs(cd_calc - cd)
+    ferme = ecart < 0.9
+
+    return [A, B, C, D], ferme, ecart
 
 # --- Calcul du rectangle englobant ---
 def minimum_bounding_rectangle(points):
@@ -101,6 +162,24 @@ def export_pdf(points, rect, titre="Rectangle englobant"):
     buffer.seek(0)
     return buffer
 
+def export_quadrilatere_to_dxf(points, filename="quadrilatere.dxf"):
+    """
+    Exporte les points d'un quadrilatère vers un fichier DXF.
+    Les points doivent être dans l'ordre [A, B, C, D].
+    """
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+
+    # Fermer la boucle : A→B→C→D→A
+    ordered_points = points + [points[0]]
+    for i in range(len(ordered_points) - 1):
+        msp.add_line(ordered_points[i], ordered_points[i + 1])
+
+    # Créer un fichier temporaire et retourner le chemin
+    temp_path = os.path.join(tempfile.gettempdir(), filename)
+    doc.saveas(temp_path)
+    return temp_path
+
 # --- Interface Streamlit ---
 def main():
     st.set_page_config(page_title="Rectangle Englobant", page_icon="📐")
@@ -109,7 +188,8 @@ def main():
         "Losange (côté + angle)",
         "Losange (2 diagonales)",
         "Trapèze isocèle",
-        "Parallélogramme"
+        "Parallélogramme",
+        "Quadrilatère général"
     ])
 
     points = []
@@ -135,6 +215,36 @@ def main():
         angle = st.number_input("Angle entre base et côté (°)", value=60.0, min_value=1.0, max_value=179.0)
         points = parallelogramme_points(base, cote, angle)
 
+    elif forme == "Quadrilatère avec côtés opposés parallèles (AB ‖ CD)":
+        ab = st.number_input("Longueur AB", value=1000, min_value=1)
+        bc = st.number_input("Longueur BC", value=600, min_value=1)
+        cd = st.number_input("Longueur CD", value=1000, min_value=1)
+        da = st.number_input("Longueur DA", value=600, min_value=1)
+        angle_a = st.number_input("Angle A (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
+        angle_b = st.number_input("Angle B (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
+
+        points, ferme, ecart = construire_quadrilatere_ab_parallele_cd(ab, bc, cd, da, angle_a, angle_b)
+
+        if ferme:
+            st.success("✅ La figure se ferme correctement.")
+        else:
+            st.error(f"❌ La figure ne se ferme pas (écart de {ecart:.2f} unités).")
+
+    elif forme == "Quadrilatère général":
+        ab = st.number_input("Longueur AB", value=10.0, min_value=0.1)
+        bc = st.number_input("Longueur BC", value=6.0, min_value=0.1)
+        cd = st.number_input("Longueur CD", value=10.0, min_value=0.1)
+        da = st.number_input("Longueur DA", value=6.0, min_value=0.1)
+        angle_a = st.number_input("Angle A (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
+        angle_b = st.number_input("Angle B (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
+
+        points, ferme, ecart = construire_quadrilatere_general(ab, bc, cd, da, angle_a, angle_b)
+
+        if ferme:
+            st.success("✅ La figure se ferme correctement.")
+        else:
+            st.error(f"❌ La figure ne se ferme pas (écart de {ecart:.2f} unités).")
+
     if points:
         rect = minimum_bounding_rectangle(points)
         fig = draw_shape_and_rectangle(points, rect)
@@ -153,6 +263,17 @@ def main():
             pdf_buffer = export_pdf(points, rect, titre="Rectangle englobant de la forme")
             st.download_button("Télécharger le PDF", pdf_buffer, file_name="rectangle_englobant.pdf")
 
+
+        # Eport DXF
+        if st.button("📐 Exporter en DXF"):
+            dxf_path = export_quadrilatere_to_dxf(points, "quadrilatere_export.dxf")
+            with open(dxf_path, "rb") as f:
+                st.download_button(
+                    label="📥 Télécharger le fichier DXF",
+                    data=f,
+                    file_name="quadrilatere.dxf",
+                    mime="application/dxf"
+                )
 if __name__ == "__main__":
     main()
 

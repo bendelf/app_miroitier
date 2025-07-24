@@ -1,0 +1,358 @@
+import streamlit as st
+import math
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon, LineString, Point
+import numpy as np
+import tempfile
+import os
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+import ezdxf
+
+st.set_page_config(layout="centered")
+
+st.title("🔺 Trapèze avec cintre — flèche perpendiculaire à CD")
+
+# --- Entrées utilisateur ---
+largeur = st.number_input("Largeur de la base AB (mm)", value=1000, min_value=1)
+hg = st.number_input("Hauteur côté gauche (AD) (mm)", value=600, min_value=0)
+hd = st.number_input("Hauteur côté droit (BC) (mm)", value=800, min_value=0)
+
+mode_fleche = st.radio("Définir la flèche :", ["Saisie directe", "Calcul depuis la base"])
+
+if mode_fleche == "Saisie directe":
+    fleche = st.number_input("Flèche (mm)", value=50.0, min_value=0.0)
+else:
+    h_base = st.number_input("Hauteur verticale depuis le milieu de AB (mm)", value=700.0, min_value=0.0)
+
+# --- Calcul des points de base ---
+A = (0, 0)
+B = (largeur, 0)
+D = (0, hg)
+C = (largeur, hd)
+milieu_AB = ((A[0] + B[0]) / 2, (A[1] + B[1]) / 2)
+
+# --- Calcul de la flèche réelle si "Calcul depuis la base" ---
+if mode_fleche == "Calcul depuis la base":
+    P = (milieu_AB[0], milieu_AB[1] + h_base)  # point à projeter
+    line_CD = LineString([D, C])
+    proj = line_CD.interpolate(line_CD.project(Point(P)))
+    fleche = Point(P).distance(proj)
+    st.info(f"📐 Flèche réelle calculée perpendiculairement à CD : **{fleche:.2f} mm**")
+
+# --- Génération des points de l’arc parabolique ---
+def generate_arc(D, C, fleche, n_points=50):
+    arc_points = []
+    for t in np.linspace(0, 1, n_points):
+        x = D[0] + t * (C[0] - D[0])
+        y = D[1] + t * (C[1] - D[1])
+        h = 4 * fleche * t * (1 - t)  # parabole
+        dx, dy = C[0] - D[0], C[1] - D[1]
+        norm = math.hypot(dx, dy)
+        nx, ny = -dy / norm, dx / norm
+        arc_points.append((x + nx * h, y + ny * h))
+    return arc_points
+
+arc = generate_arc(D, C, fleche)
+
+# --- Création de la forme complète ---
+points = [A, B, C] + arc[::-1] + [D]
+
+# --- Calcul rectangle englobant ---
+def minimum_bounding_rectangle(points):
+    poly = Polygon(points)
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    min_rect = poly.minimum_rotated_rectangle
+    return list(min_rect.exterior.coords)[:-1]
+
+rect = minimum_bounding_rectangle(points)
+
+# --- Affichage graphique ---
+def draw_shape_and_rectangle(shape_pts, rect_pts, fleche_pt=None):
+    fig, ax = plt.subplots()
+
+    poly = Polygon(shape_pts)
+    x, y = poly.exterior.xy
+    ax.fill(x, y, alpha=0.5, label="Forme")
+
+    rx, ry = zip(*rect_pts + [rect_pts[0]])
+    ax.plot(rx, ry, 'r--', label="Rectangle englobant")
+
+    w = round(math.dist(rect_pts[0], rect_pts[1]), 2)
+    h = round(math.dist(rect_pts[1], rect_pts[2]), 2)
+    mid_top = ((rect_pts[0][0] + rect_pts[1][0]) / 2, (rect_pts[0][1] + rect_pts[1][1]) / 2)
+    mid_right = ((rect_pts[1][0] + rect_pts[2][0]) / 2, (rect_pts[1][1] + rect_pts[2][1]) / 2)
+    ax.text(*mid_top, f"{w} mm", ha="center", va="bottom", fontsize=10, color="red", backgroundcolor="white")
+    ax.text(*mid_right, f"{h} mm", ha="left", va="center", fontsize=10, rotation=90, color="red", backgroundcolor="white")
+
+    if fleche_pt:
+        ax.plot([fleche_pt[0][0], fleche_pt[1][0]], [fleche_pt[0][1], fleche_pt[1][1]], 'k:', lw=1.5)
+        fx = (fleche_pt[0][0] + fleche_pt[1][0]) / 2
+        fy = (fleche_pt[0][1] + fleche_pt[1][1]) / 2
+        f_val = round(Point(fleche_pt[0]).distance(Point(fleche_pt[1])), 2)
+        ax.text(fx, fy, f"Flèche {f_val} mm", fontsize=9, ha='left', va='center', backgroundcolor='white')
+
+    ax.set_aspect('equal')
+    ax.axis('off')
+    ax.legend()
+    return fig
+
+fleche_segment = None
+if mode_fleche == "Calcul depuis la base":
+    fleche_segment = [P, proj]
+
+fig = draw_shape_and_rectangle(points, rect, fleche_segment)
+st.pyplot(fig)
+
+# --- Export PDF ---
+def export_pdf(points, rect, filename="rectangle_englobant.pdf"):
+    fig, ax = plt.subplots()
+    poly = Polygon(points)
+    x, y = poly.exterior.xy
+    ax.fill(x, y, alpha=0.5)
+    x_rect, y_rect = zip(*rect + [rect[0]])
+    ax.plot(x_rect, y_rect, 'r--')
+    ax.axis('equal')
+    plt.axis('off')
+    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    plt.savefig(tmpfile.name, bbox_inches='tight')
+    plt.close(fig)
+
+    pdf_path = os.path.join(tempfile.gettempdir(), filename)
+    c = canvas.Canvas(pdf_path, pagesize=letter)
+    width_pdf, height_pdf = letter
+    c.drawString(100, height_pdf - 50, "Rectangle englobant de la forme")
+    rect_width = round(math.dist(rect[0], rect[1]), 2)
+    rect_height = round(math.dist(rect[1], rect[2]), 2)
+    c.drawString(100, height_pdf - 70, f"Largeur : {rect_width} mm")
+    c.drawString(100, height_pdf - 90, f"Hauteur : {rect_height} mm")
+    c.drawImage(tmpfile.name, 100, 300, width=400, preserveAspectRatio=True)
+    c.save()
+    os.unlink(tmpfile.name)
+    return pdf_path
+
+if st.button("📄 Exporter en PDF"):
+    pdf_path = export_pdf(points, rect)
+    with open(pdf_path, "rb") as f:
+        st.download_button("Télécharger le PDF", f, file_name="rectangle_englobant.pdf")
+
+# --- Export DXF ---
+def export_dxf(points, filename="forme.dxf"):
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    closed_points = points + [points[0]]
+    for i in range(len(closed_points) - 1):
+        msp.add_line(closed_points[i], closed_points[i + 1])
+    path = os.path.join(tempfile.gettempdir(), filename)
+    doc.saveas(path)
+    return path
+
+if st.button("📐 Exporter en DXF"):
+    dxf_path = export_dxf(points, "forme_cintree.dxf")
+    with open(dxf_path, "rb") as f:
+        st.download_button("📥 Télécharger le DXF", f, file_name="forme_cintree.dxf", mime="application/dxf")
+
+
+
+
+#######################
+import streamlit as st
+import math
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+import tempfile
+import os
+import ezdxf
+
+def minimum_bounding_rectangle(points):
+    poly = Polygon(points)
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    min_rect = poly.minimum_rotated_rectangle
+    return list(min_rect.exterior.coords)[:-1]
+
+
+import math
+
+def rectangle_cintre_points(largeur, hg, hd, fleche, n_points=20):
+    """Construit les points d’un rectangle avec un cintre dont la flèche est perpendiculaire à CD."""
+
+    # Points du haut du rectangle
+    D = (0, hg)
+    C = (largeur, hd)
+
+    # Base du rectangle (AB)
+    A = (0, 0)
+    B = (largeur, 0)
+
+    # Vecteur CD (tangente)
+    dx = C[0] - D[0]
+    dy = C[1] - D[1]
+    length = math.hypot(dx, dy)
+
+    # Vecteur normal unitaire à CD
+    nx = -dy / length
+    ny = dx / length
+
+    # Générer les points de l’arc (de D à C)
+    arc_points = []
+    top_point = None
+    max_proj = -float("inf")
+
+    for i in range(n_points + 1):
+        t = i / n_points
+        x_base = D[0] + t * dx
+        y_base = D[1] + t * dy
+
+        # Flèche parabolique perpendiculaire à CD
+        h = 4 * fleche * t * (1 - t)
+        x = x_base + h * nx
+        y = y_base + h * ny
+        arc_points.append((x, y))
+
+        # Mémoriser le point le plus haut par rapport à la base CD
+        proj = x * ny - y * nx  # projection perpendiculaire (produit vectoriel)
+        if proj > max_proj:
+            max_proj = proj
+            top_point = (x, y)
+
+    return [A, B, C] + arc_points[::-1] + [D], top_point
+
+def draw_shape_and_rectangle(shape_pts, rect_pts, top_point=None):
+    fig, ax = plt.subplots()
+
+    shape_poly = Polygon(shape_pts)
+    x, y = shape_poly.exterior.xy
+    ax.fill(x, y, alpha=0.5, label="Forme")
+
+    rect_poly = Polygon(rect_pts)
+    x_rect, y_rect = rect_poly.exterior.xy
+    ax.plot(x_rect, y_rect, 'r--', label="Rectangle englobant")
+
+    p0, p1, p2, p3 = rect_pts
+    mid_top = ((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
+    mid_right = ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
+
+    width = round(math.dist(p0, p1), 2)
+    height = round(math.dist(p1, p2), 2)
+
+    ax.text(*mid_top, f"{width} mm", color='red', fontsize=12, ha='center', va='bottom', backgroundcolor='white')
+    ax.text(*mid_right, f"{height} mm", color='red', fontsize=12, ha='left', va='center', rotation=90, backgroundcolor='white')
+
+    if top_point:
+        ax.plot(*top_point, 'ko')  # point noir
+        ax.annotate(f"Sommet cintre\n({round(top_point[0],1)} ; {round(top_point[1],1)})",
+                    xy=top_point, xytext=(top_point[0]+20, top_point[1]+20),
+                    arrowprops=dict(arrowstyle="->", lw=1.2),
+                    fontsize=10, backgroundcolor='white')
+
+    ax.axis('equal')
+    ax.legend()
+    return fig
+
+def export_pdf(points, rect, filename="rectangle_englobant.pdf"):
+    fig, ax = plt.subplots()
+    shape_poly = Polygon(points)
+    x, y = shape_poly.exterior.xy
+    ax.fill(x, y, alpha=0.5)
+
+    rect_poly = Polygon(rect)
+    x_rect, y_rect = rect_poly.exterior.xy
+    ax.plot(x_rect, y_rect, 'r--')
+
+    ax.axis('equal')
+    plt.axis('off')
+
+    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    plt.savefig(tmpfile.name, bbox_inches='tight')
+    plt.close(fig)
+
+    pdf_path = os.path.join(tempfile.gettempdir(), filename)
+    c = canvas.Canvas(pdf_path, pagesize=letter)
+    width_pdf, height_pdf = letter
+
+    c.drawString(100, height_pdf - 50, "Rectangle englobant de la forme")
+    rect_width = round(math.dist(rect[0], rect[1]), 2)
+    rect_height = round(math.dist(rect[1], rect[2]), 2)
+    c.drawString(100, height_pdf - 70, f"Largeur : {rect_width}")
+    c.drawString(100, height_pdf - 90, f"Hauteur : {rect_height}")
+
+    c.drawImage(tmpfile.name, 100, 300, width=400, preserveAspectRatio=True)
+    c.save()
+
+    os.unlink(tmpfile.name)
+    return pdf_path
+
+def export_quadrilatere_to_dxf(points, filename="quadrilatere.dxf"):
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    ordered_points = points + [points[0]]
+    for i in range(len(ordered_points) - 1):
+        msp.add_line(ordered_points[i], ordered_points[i + 1])
+
+    temp_path = os.path.join(tempfile.gettempdir(), filename)
+    doc.saveas(temp_path)
+    return temp_path
+
+def main():
+    st.title("🔺 Dessin forme cintrée")
+
+    forme = st.selectbox("Choisissez une forme :", [
+        "Rectangle avec cintre supérieur"
+    ])
+
+    if forme == "Rectangle avec cintre supérieur":
+        largeur = st.number_input("Largeur de la base", value=1000, min_value=1)
+        hg = st.number_input("Hauteur gauche", value=600, min_value=0)
+        hd = st.number_input("Hauteur droite", value=1000, min_value=0)
+
+        mode_fleche = st.radio("Mode de définition de la flèche", ["Entrer la flèche réelle (perpendiculaire à CD)",
+                                                                    "Entrer une hauteur verticale depuis AB"])
+
+        if mode_fleche == "Entrer la flèche réelle (perpendiculaire à CD)":
+            fleche = st.number_input("Flèche réelle", value=50, min_value=0)
+        else:
+            h_verticale = st.number_input("Hauteur verticale (depuis le milieu de AB)", value=50, min_value=0)
+
+            # Calcul de la direction de CD
+            dx = largeur
+            dy = hd - hg
+            length = math.hypot(dx, dy)
+            nx = -dy / length
+            ny = dx / length
+
+            # Flèche projetée dans la direction normale à CD
+            fleche = h_verticale * (ny)  # projection d'une verticale (0,1) sur la normale
+            fleche = abs(fleche)
+
+            st.markdown(f"📐 **Flèche réelle projetée perpendiculaire à CD** : `{fleche:.2f} mm`")
+
+        points, top_point = rectangle_cintre_points(largeur, hg, hd, fleche)
+
+        rect = minimum_bounding_rectangle(points)
+
+        rect_width = round(math.dist(rect[0], rect[1]), 2)
+        rect_height = round(math.dist(rect[1], rect[2]), 2)
+
+        st.success("📏 Dimensions du rectangle englobant :")
+        st.markdown(f"**Largeur** : {rect_width} mm")
+        st.markdown(f"**Hauteur** : {rect_height} mm")
+
+        fig = draw_shape_and_rectangle(points, rect, top_point)
+        st.pyplot(fig)
+
+        if st.button("📄 Exporter en PDF"):
+            pdf_path = export_pdf(points, rect)
+            with open(pdf_path, "rb") as f:
+                st.download_button("Télécharger le PDF", f, file_name="rectangle_englobant.pdf")
+
+        if st.button("📐 Exporter en DXF"):
+            dxf_path = export_quadrilatere_to_dxf(points, "quadrilatere_export.dxf")
+            with open(dxf_path, "rb") as f:
+                st.download_button("📥 Télécharger le fichier DXF", f, file_name="quadrilatere.dxf", mime="application/dxf")
+
+if __name__ == "__main__":
+    main()

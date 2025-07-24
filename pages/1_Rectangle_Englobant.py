@@ -162,9 +162,15 @@ def export_pdf(points, rect, titre="Rectangle englobant"):
     buffer.seek(0)
     return buffer
 
-def export_quadrilatere_to_dxf(points, filename="quadrilatere.dxf"):
+
+import ezdxf
+import os
+import tempfile
+
+
+def export_quadrilatere_to_dxf(points, filename="quadrilatere.dxf", ref="", observation=""):
     """
-    Exporte les points d'un quadrilatère vers un fichier DXF.
+    Exporte les points d'un quadrilatère vers un fichier DXF avec une référence et une observation.
     Les points doivent être dans l'ordre [A, B, C, D].
     """
     doc = ezdxf.new()
@@ -175,15 +181,39 @@ def export_quadrilatere_to_dxf(points, filename="quadrilatere.dxf"):
     for i in range(len(ordered_points) - 1):
         msp.add_line(ordered_points[i], ordered_points[i + 1])
 
+    # Position de base pour les annotations (au-dessus du point A)
+    base_x, base_y = points[0]
+    text_height = 2.5
+
+    if ref:
+        msp.add_text(f"Réf : {ref}", dxfattribs={"height": text_height}).set_placement(
+            (base_x, base_y + 10),
+            align="LEFT"
+        )
+
+    if observation:
+        msp.add_text(f"Note : {observation}", dxfattribs={"height": text_height}).set_placement(
+            (base_x, base_y + 7),
+            align="LEFT"
+        )
+
     # Créer un fichier temporaire et retourner le chemin
     temp_path = os.path.join(tempfile.gettempdir(), filename)
     doc.saveas(temp_path)
     return temp_path
 
+
 # --- Interface Streamlit ---
 def main():
     st.set_page_config(page_title="Rectangle Englobant", page_icon="📐")
     st.title("📐 Calcul du rectangle englobant")
+    st.info("Calcule le plus petit rectangle possible dans laquelle la forme est englobée")
+
+    # Zone de saisie de texte (une seule ligne)
+    ref = st.text_input("Entrez une référence")
+
+    # Zone de texte multiligne
+    observation = st.text_area("Entrez une observation")
     forme = st.selectbox("Choisir une forme :", [
         "Losange (côté + angle)",
         "Losange (2 diagonales)",
@@ -266,12 +296,12 @@ def main():
 
         # Eport DXF
         if st.button("📐 Exporter en DXF"):
-            dxf_path = export_quadrilatere_to_dxf(points, "quadrilatere_export.dxf")
+            dxf_path = export_quadrilatere_to_dxf(points, "quadrilatere_export.dxf", ref="", observation="")
             with open(dxf_path, "rb") as f:
                 st.download_button(
                     label="📥 Télécharger le fichier DXF",
                     data=f,
-                    file_name="quadrilatere.dxf",
+                    file_name=ref+".dxf",
                     mime="application/dxf"
                 )
 if __name__ == "__main__":

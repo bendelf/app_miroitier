@@ -95,7 +95,7 @@ def draw_shape_and_rectangle(shape_pts, rect_pts, fleche_pt=None):
     mid_top = ((rect_pts[0][0] + rect_pts[1][0]) / 2, (rect_pts[0][1] + rect_pts[1][1]) / 2)
     mid_right = ((rect_pts[1][0] + rect_pts[2][0]) / 2, (rect_pts[1][1] + rect_pts[2][1]) / 2)
     ax.text(*mid_top, f"{w} mm", ha="center", va="bottom", fontsize=10, color="red", backgroundcolor="white")
-    ax.text(*mid_right, f"{h} mm", ha="left", va="center", fontsize=10, rotation=90, color="red", backgroundcolor="white")
+    ax.text(*mid_right, f"{h} mm", ha="left", va="center", fontsize=10, color="red", backgroundcolor="white")
 
     if fleche_pt:
         p1, p2 = fleche_pt
@@ -122,36 +122,58 @@ fig = draw_shape_and_rectangle(points, rect, fleche_segment)
 st.pyplot(fig)
 
 # --- Export PDF ---
-def export_pdf(points, rect, filename="rectangle_englobant.pdf"):
-    fig, ax = plt.subplots()
-    poly = Polygon(points)
-    x, y = poly.exterior.xy
-    ax.fill(x, y, alpha=0.5)
-    x_rect, y_rect = zip(*rect + [rect[0]])
-    ax.plot(x_rect, y_rect, 'r--')
-    ax.axis('equal')
-    plt.axis('off')
-    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-    plt.savefig(tmpfile.name, bbox_inches='tight')
+def export_pdf(points, rect, fleche_segment=None, filename="rectangle_englobant.pdf"):
+    # 1. Redessiner la figure complète (comme dans Streamlit)
+    fig = draw_shape_and_rectangle(points, rect, fleche_segment)
+
+    # 2. Sauvegarder en image temporaire
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png', mode="wb") as tmpfile:
+        fig.savefig(tmpfile.name, bbox_inches='tight', dpi=200)
+        image_path = tmpfile.name  # on garde le chemin
     plt.close(fig)
 
+    # 3. Création du PDF avec en-tête + image
     pdf_path = os.path.join(tempfile.gettempdir(), filename)
     c = canvas.Canvas(pdf_path, pagesize=letter)
     width_pdf, height_pdf = letter
-    c.drawString(100, height_pdf - 50, "Rectangle englobant de la forme")
+
+    y = height_pdf - 40
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Fiche technique - Forme cintrée")
+    y -= 20
+
+    c.setFont("Helvetica", 10)
+    if ref:
+        c.drawString(40, y, f"Référence : {ref}")
+        y -= 15
+    if observation:
+        c.drawString(40, y, f"Observation : {observation}")
+        y -= 15
+
     rect_width = round(math.dist(rect[0], rect[1]), 2)
     rect_height = round(math.dist(rect[1], rect[2]), 2)
-    c.drawString(100, height_pdf - 70, f"Largeur : {rect_width} mm")
-    c.drawString(100, height_pdf - 90, f"Hauteur : {rect_height} mm")
-    c.drawImage(tmpfile.name, 100, 300, width=400, preserveAspectRatio=True)
+    c.drawString(40, y, f"Largeur rectangle englobant : {rect_width} mm")
+    y -= 15
+    c.drawString(40, y, f"Hauteur rectangle englobant : {rect_height} mm")
+    y -= 15
+
+    c.drawString(40, y, f"Flèche (réelle ou saisie) : {round(fleche, 2)} mm")
+    y -= 25
+
+    # 4. Insertion de l'image
+    image_width = 450
+    image_height = 300
+    c.drawImage(image_path, 80, 100, width=image_width, height=image_height, preserveAspectRatio=True)
+
     c.save()
-    os.unlink(tmpfile.name)
+    os.unlink(image_path)
     return pdf_path
 
 if st.button("📄 Exporter en PDF"):
-    pdf_path = export_pdf(points, rect)
+    pdf_path = export_pdf(points, rect, fleche_segment)
     with open(pdf_path, "rb") as f:
-        st.download_button("Télécharger le PDF", f, file_name="rectangle_englobant.pdf")
+        st.download_button("Télécharger le PDF", f, file_name=(ref or "forme") + ".pdf")
+
 
 # --- Export DXF ---
 def export_dxf(points, filename="forme.dxf"):

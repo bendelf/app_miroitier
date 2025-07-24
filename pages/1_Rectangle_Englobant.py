@@ -285,7 +285,7 @@ def main():
         # Export PDF
         if st.button("📄 Exporter en PDF"):
             pdf_buffer = export_pdf(points, rect, titre="Rectangle englobant de la forme")
-            st.download_button("Télécharger le PDF", pdf_buffer, file_name="rectangle_englobant.pdf")
+            st.download_button("Télécharger le PDF", pdf_buffer, file_name=(ref or "forme") + ".pdf")
 
 
         # Eport DXF
@@ -295,7 +295,7 @@ def main():
                 st.download_button(
                     label="📥 Télécharger le fichier DXF",
                     data=f,
-                    file_name=ref+".dxf",
+                    file_name=(ref or "forme") + ".dxf",
                     mime="application/dxf"
                 )
 if __name__ == "__main__":

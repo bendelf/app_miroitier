@@ -189,4 +189,4 @@ def export_dxf(points, filename="forme.dxf"):
 if st.button("📐 Exporter en DXF"):
     dxf_path = export_dxf(points, ref + ".dxf")
     with open(dxf_path, "rb") as f:
-        st.download_button("📥 Télécharger le DXF", f, file_name=ref + ".dxf", mime="application/dxf")
+        st.download_button("📥 Télécharger le DXF", f, file_name=(ref or "forme") + ".dxf", mime="application/dxf")

@@ -48,7 +48,7 @@ if mode_fleche == "Calcul depuis la base":
     P = (milieu_AB[0], milieu_AB[1] + h_base)  # point à projeter
     line_CD = LineString([D, C])
     proj = line_CD.interpolate(line_CD.project(Point(P)))
-    fleche = Point(P).distance(proj)
+    fleche = int(Point(P).distance(proj))
     st.info(f"📐 Flèche réelle calculée perpendiculairement à CD : **{fleche:.2f} mm**")
 
 # --- Génération des points de l’arc parabolique ---
@@ -106,7 +106,7 @@ def draw_shape_and_rectangle(shape_pts, rect_pts, fleche_pt=None):
         ax.plot([p1.x, p2.x], [p1.y, p2.y], 'k:', lw=1.5)
         fx = (p1.x + p2.x) / 2
         fy = (p1.y + p2.y) / 2
-        f_val = round(p1.distance(p2), 2)
+        f_val = int(p1.distance(p2))
         ax.text(fx, fy, f"Flèche {f_val} mm", fontsize=9, ha='left', va='center', backgroundcolor='white')
 
     ax.set_aspect('equal')
@@ -122,7 +122,7 @@ fig = draw_shape_and_rectangle(points, rect, fleche_segment)
 st.pyplot(fig)
 
 # --- Export PDF ---
-def export_pdf(points, rect, fleche_segment=None, filename="rectangle_englobant.pdf"):
+def export_pdf(points, rect, fleche_segment=None, filename="forme_cintré.pdf"):
     # 1. Redessiner la figure complète (comme dans Streamlit)
     fig = draw_shape_and_rectangle(points, rect, fleche_segment)
 

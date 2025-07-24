@@ -162,12 +162,6 @@ def export_pdf(points, rect, titre="Rectangle englobant"):
     buffer.seek(0)
     return buffer
 
-
-import ezdxf
-import os
-import tempfile
-
-
 def export_quadrilatere_to_dxf(points, filename="quadrilatere.dxf", ref="", observation=""):
     """
     Exporte les points d'un quadrilatère vers un fichier DXF avec une référence et une observation.

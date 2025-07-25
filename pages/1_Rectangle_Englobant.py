@@ -40,9 +40,9 @@ def trapeze_rectangle_points(hauteur1, hauteur2, base):
     Trapèze rectangle avec l'angle droit en bas à gauche.
     """
     attributs = {
-        "Base 1 (mm)": hauteur1,
-        "Base 2 (mm)": hauteur2,
-        "Hauteur (mm)": base
+        "Hauteur 1 (mm)": hauteur1,
+        "Hauteur 2 (mm)": hauteur2,
+        "Base (mm)": base
     }
     return [
         (0, 0),  # A
@@ -355,7 +355,7 @@ def main():
                 ref=ref,
                 observation=observation,
                 attributs=attributs,
-                titre="Trapèze isocèle",
+                titre="Forme",
                 filename=(ref or "forme") + ".pdf"
             )
             with open(pdf_path, "rb") as f:

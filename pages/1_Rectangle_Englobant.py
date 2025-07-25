@@ -14,31 +14,50 @@ def losange_points_cote_angle(cote, angle_deg):
     angle_rad = math.radians(angle_deg)
     dx = cote * math.cos(angle_rad / 2)
     dy = cote * math.sin(angle_rad / 2)
-    return [(-dx, 0), (0, dy), (dx, 0), (0, -dy)]
+
+    attributs = {
+    }
+    return [(-dx, 0), (0, dy), (dx, 0), (0, -dy)], attributs
 
 def losange_points_diagonales(d1, d2):
-    return [(-d1 / 2, 0), (0, d2 / 2), (d1 / 2, 0), (0, -d2 / 2)]
+    attributs = {
+        "Diagonale 1 (mm)": d1,
+        "Diagonale 2 (mm)": d2
+    }
+    return [(-d1 / 2, 0), (0, d2 / 2), (d1 / 2, 0), (0, -d2 / 2)], attributs
 
 def trapeze_points(base1, base2, hauteur):
     dx = (base1 - base2) / 2
-    return [(-base1 / 2, 0), (base1 / 2, 0), (base2 / 2, hauteur), (-base2 / 2, hauteur)]
+    attributs = {
+        "Base 1 (mm)": base1,
+        "Base 2 (mm)": base2,
+        "Hauteur (mm)": hauteur
+    }
+    return [(-base1 / 2, 0), (base1 / 2, 0), (base2 / 2, hauteur), (-base2 / 2, hauteur)], attributs
 
 def trapeze_rectangle_points(hauteur1, hauteur2, base):
     """
     Trapèze rectangle avec l'angle droit en bas à gauche.
     """
+    attributs = {
+        "Base 1 (mm)": hauteur1,
+        "Base 2 (mm)": hauteur2,
+        "Hauteur (mm)": base
+    }
     return [
         (0, 0),  # A
         (base, 0),  # B
         (base, hauteur2),  # C
         (0, hauteur1)  # D
-    ]
+    ], attributs
 
 def parallelogramme_points(base, cote, angle_deg):
     angle_rad = math.radians(angle_deg)
     dx = cote * math.cos(angle_rad)
     dy = cote * math.sin(angle_rad)
-    return [(0, 0), (base, 0), (base + dx, dy), (dx, dy)]
+    attributs = {
+    }
+    return [(0, 0), (base, 0), (base + dx, dy), (dx, dy)], attributs
 
 
 def construire_quadrilatere_ab_parallele_cd(ab, bc, cd, da, angle_a_deg, angle_b_deg):
@@ -65,7 +84,10 @@ def construire_quadrilatere_ab_parallele_cd(ab, bc, cd, da, angle_a_deg, angle_b
     ecart = math.hypot(C_corrected[0] - C[0], C_corrected[1] - C[1])
     ferme = ecart < 0.9
 
-    return [A, B, C_corrected, D], ferme, ecart
+    attributs = {
+    }
+
+    return [A, B, C_corrected, D], ferme, ecart, attributs
 
 def construire_quadrilatere_general(ab, bc, cd, da, angle_a_deg, angle_b_deg):
     """
@@ -96,7 +118,10 @@ def construire_quadrilatere_general(ab, bc, cd, da, angle_a_deg, angle_b_deg):
     ecart = abs(cd_calc - cd)
     ferme = ecart < 0.9
 
-    return [A, B, C, D], ferme, ecart
+    attributs = {
+    }
+
+    return [A, B, C, D], ferme, ecart, attributs
 
 # --- Calcul du rectangle englobant ---
 def minimum_bounding_rectangle(points):
@@ -136,42 +161,64 @@ def draw_shape_and_rectangle(shape_pts, rect_pts):
 
 
 # --- Export PDF ---
-def export_pdf(points, rect, titre="Rectangle englobant"):
-    buffer = io.BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
 
-    pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(100, height - 70, titre)
+def export_forme_pdf(points, rect, ref="", observation="", attributs=None, titre="Fiche technique", filename="forme.pdf"):
+    """
+    points : liste de tuples (points de la forme)
+    rect : rectangle englobant (liste de 4 points)
+    ref : texte de référence
+    observation : texte libre
+    attributs : dictionnaire de paramètres spécifiques à la forme
+    """
+    # 1. Redessiner et sauvegarder le schéma
+    fig = draw_shape_and_rectangle(points, rect)
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png', mode="wb") as tmpfile:
+        fig.savefig(tmpfile.name, bbox_inches='tight', dpi=200)
+        image_path = tmpfile.name
+    plt.close(fig)
 
-    # Dimensions
+    # 2. Créer le PDF
+    pdf_path = os.path.join(tempfile.gettempdir(), filename)
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+    width_pdf, height_pdf = A4
+
+    y = height_pdf - 40
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, titre)
+    y -= 25
+
+    c.setFont("Helvetica", 10)
+    if ref:
+        c.drawString(40, y, f"Référence : {ref}")
+        y -= 15
+    if observation:
+        c.drawString(40, y, f"Observation : {observation}")
+        y -= 15
+
+    # Afficher les attributs spécifiques à la forme
+    if attributs:
+        for key, value in attributs.items():
+            c.drawString(40, y, f"{key} : {value}")
+            y -= 15
+
+    # Dimensions rectangle englobant
     rect_width = round(math.dist(rect[0], rect[1]), 2)
     rect_height = round(math.dist(rect[1], rect[2]), 2)
+    y -= 5
+    c.drawString(40, y, f"Largeur rectangle englobant : {rect_width} mm")
+    y -= 15
+    c.drawString(40, y, f"Hauteur rectangle englobant : {rect_height} mm")
+    y -= 25
 
-    pdf.setFont("Helvetica", 12)
-    pdf.drawString(100, height - 90, f"Largeur : {rect_width}")
-    pdf.drawString(100, height - 110, f"Hauteur : {rect_height}")
+    # 3. Insertion image
+    image_width = 450
+    image_height = 300
+    c.drawImage(image_path, 80, 100, width=image_width, height=image_height, preserveAspectRatio=True)
 
-    # Schéma simple (optionnel)
-    scale = 20
-    offset_x = 100
-    offset_y = 400
+    c.save()
+    os.unlink(image_path)
+    return pdf_path
 
-    def draw_poly(poly, color):
-        pdf.setStrokeColor(color)
-        for i in range(len(poly)):
-            x1, y1 = poly[i]
-            x2, y2 = poly[(i + 1) % len(poly)]
-            pdf.line(offset_x + x1 * scale, offset_y + y1 * scale,
-                     offset_x + x2 * scale, offset_y + y2 * scale)
-
-    draw_poly(points, color="black")
-    draw_poly(rect, color="red")
-
-    pdf.showPage()
-    pdf.save()
-    buffer.seek(0)
-    return buffer
 
 def export_quadrilatere_to_dxf(points, filename="quadrilatere.dxf", ref="", observation=""):
     """
@@ -232,30 +279,30 @@ def main():
     if forme == "Losange (côté + angle)":
         cote = st.number_input("Longueur du côté (mm)", value=1000, min_value=1)
         angle = st.number_input("Angle en degrés", value=60.0, min_value=1.0, max_value=179.0)
-        points = losange_points_cote_angle(cote, angle)
+        points, attributs = losange_points_cote_angle(cote, angle)
 
     elif forme == "Losange (2 diagonales)":
         d1 = st.number_input("Diagonale 1 (mm)", value=1000, min_value=1)
         d2 = st.number_input("Diagonale 2 (mm)", value=600, min_value=1)
-        points = losange_points_diagonales(d1, d2)
+        points, attributs = losange_points_diagonales(d1, d2)
 
     elif forme == "Trapèze isocèle":
         base1 = st.number_input("Grande base (mm)", value=1000, min_value=1)
         base2 = st.number_input("Petite base (mm)", value=600, min_value=1)
         hauteur = st.number_input("Hauteur (mm)", value=400, min_value=1)
-        points = trapeze_points(base1, base2, hauteur)
+        points, attributs = trapeze_points(base1, base2, hauteur)
 
     elif forme == "Trapèze rectangle":
         hauteur1 = st.number_input("Hauteur 1 (mm)", value=1000, min_value=1)
         hauteur2 = st.number_input("Hauteur 2 (mm)", value=700, min_value=1)
         base = st.number_input("Base (mm)", value=400, min_value=1)
-        points = trapeze_rectangle_points(hauteur1, hauteur2, base)
+        points, attributs = trapeze_rectangle_points(hauteur1, hauteur2, base)
 
     elif forme == "Parallélogramme":
         base = st.number_input("Longueur de la base (mm)", value=1000, min_value=1)
         cote = st.number_input("Longueur du côté adjacent (mm)", value=600, min_value=1)
         angle = st.number_input("Angle entre base et côté (°)", value=60.0, min_value=1.0, max_value=179.0)
-        points = parallelogramme_points(base, cote, angle)
+        points, attributs = parallelogramme_points(base, cote, angle)
 
     elif forme == "Quadrilatère avec côtés opposés parallèles (AB ‖ CD)":
         ab = st.number_input("Longueur AB", value=1000, min_value=1)
@@ -265,7 +312,7 @@ def main():
         angle_a = st.number_input("Angle A (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
         angle_b = st.number_input("Angle B (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
 
-        points, ferme, ecart = construire_quadrilatere_ab_parallele_cd(ab, bc, cd, da, angle_a, angle_b)
+        points, ferme, ecart, attributs = construire_quadrilatere_ab_parallele_cd(ab, bc, cd, da, angle_a, angle_b)
 
         if ferme:
             st.success("✅ La figure se ferme correctement.")
@@ -280,7 +327,7 @@ def main():
         angle_a = st.number_input("Angle A (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
         angle_b = st.number_input("Angle B (en degrés)", value=60.0, min_value=0.0, max_value=180.0)
 
-        points, ferme, ecart = construire_quadrilatere_general(ab, bc, cd, da, angle_a, angle_b)
+        points, ferme, ecart, attributs = construire_quadrilatere_general(ab, bc, cd, da, angle_a, angle_b)
 
         if ferme:
             st.success("✅ La figure se ferme correctement.")
@@ -302,8 +349,17 @@ def main():
 
         # Export PDF
         if st.button("📄 Exporter en PDF"):
-            pdf_buffer = export_pdf(points, rect, titre="Rectangle englobant de la forme")
-            st.download_button("Télécharger le PDF", pdf_buffer, file_name=(ref or "forme") + ".pdf")
+            pdf_path = export_forme_pdf(
+                points=points,
+                rect=rect,
+                ref=ref,
+                observation=observation,
+                attributs=attributs,
+                titre="Trapèze isocèle",
+                filename=(ref or "forme") + ".pdf"
+            )
+            with open(pdf_path, "rb") as f:
+                st.download_button("Télécharger le PDF", f, file_name=(ref or "forme") + ".pdf")
 
 
         # Eport DXF

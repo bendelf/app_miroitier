@@ -23,6 +23,17 @@ def trapeze_points(base1, base2, hauteur):
     dx = (base1 - base2) / 2
     return [(-base1 / 2, 0), (base1 / 2, 0), (base2 / 2, hauteur), (-base2 / 2, hauteur)]
 
+def trapeze_rectangle_points(grande_base, petite_base, hauteur):
+    """
+    Trapèze rectangle avec l'angle droit en bas à gauche.
+    """
+    return [
+        (0, 0),  # A
+        (grande_base, 0),  # B
+        (petite_base, hauteur),  # C
+        (0, hauteur)  # D
+    ]
+
 def parallelogramme_points(base, cote, angle_deg):
     angle_rad = math.radians(angle_deg)
     dx = cote * math.cos(angle_rad)
@@ -212,6 +223,7 @@ def main():
         "Losange (côté + angle)",
         "Losange (2 diagonales)",
         "Trapèze isocèle",
+        "Trapèze rectangle",
         "Parallélogramme",
         "Quadrilatère général"
     ])
@@ -232,6 +244,12 @@ def main():
         base2 = st.number_input("Petite base (mm)", value=600, min_value=1)
         hauteur = st.number_input("Hauteur (mm)", value=400, min_value=1)
         points = trapeze_points(base1, base2, hauteur)
+
+    elif forme == "Trapèze rectangle":
+        grande_base = st.number_input("Longueur de la grande base (mm)", value=1000, min_value=1)
+        petite_base = st.number_input("Longueur de la petite base (mm)", value=600, min_value=1)
+        hauteur = st.number_input("Hauteur (mm)", value=400, min_value=1)
+        points = trapeze_rectangle_points(grande_base, petite_base, hauteur)
 
     elif forme == "Parallélogramme":
         base = st.number_input("Longueur de la base (mm)", value=1000, min_value=1)

@@ -153,7 +153,7 @@ def draw_shape_and_rectangle(shape_pts, rect_pts):
     height = round(math.dist(p1, p2), 2)
 
     ax.text(*mid_top, f"{width}", color='red', fontsize=12, ha='center', va='bottom', backgroundcolor='white')
-    ax.text(*mid_right, f"{height}", color='red', fontsize=12, ha='left', va='center', rotation=90, backgroundcolor='white')
+    ax.text(*mid_right, f"{height}", color='red', fontsize=12, ha='left', va='center', backgroundcolor='white')
 
     ax.axis('equal')
     ax.legend()

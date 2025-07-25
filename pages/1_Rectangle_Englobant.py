@@ -247,7 +247,7 @@ def main():
 
     elif forme == "Trapèze rectangle":
         hauteur1 = st.number_input("Hauteur 1 (mm)", value=1000, min_value=1)
-        hauteur2 = st.number_input("Hauteur 2 (mm)", value=600, min_value=1)
+        hauteur2 = st.number_input("Hauteur 2 (mm)", value=700, min_value=1)
         base = st.number_input("Base (mm)", value=400, min_value=1)
         points = trapeze_rectangle_points(hauteur1, hauteur2, base)
 

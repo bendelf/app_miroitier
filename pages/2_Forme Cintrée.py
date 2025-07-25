@@ -153,7 +153,7 @@ def export_pdf(points, rect, fleche_segment=None, filename="forme_cintré.pdf"):
     y -= 15
     c.drawString(40, y, f"Côté gauche :  {hg} mm")
     y -= 15
-    c.drawString(40, y, f"Côté gauche :  {hd} mm")
+    c.drawString(40, y, f"Côté droit :  {hd} mm")
     y -= 15
 
     rect_width = round(math.dist(rect[0], rect[1]), 2)

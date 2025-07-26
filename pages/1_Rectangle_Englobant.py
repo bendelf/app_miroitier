@@ -4,7 +4,6 @@ from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-import io
 import ezdxf
 import tempfile
 import os

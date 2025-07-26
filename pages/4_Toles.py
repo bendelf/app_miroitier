@@ -1,3 +1,9 @@
+import streamlit as st
+import matplotlib.pyplot as plt
+from fpdf import FPDF
+import tempfile
+import os
+
 # Stockage des pièces en session
 if "pieces" not in st.session_state:
     st.session_state.pieces = []

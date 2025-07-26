@@ -4,3 +4,4 @@ matplotlib
 reportlab
 numpy
 ezdxf
+fpdf2

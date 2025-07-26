@@ -18,13 +18,9 @@ st.title("Commande de Tôles Pliées")
 
 st.subheader("Informations générales")
 
-st.session_state.commande_info["reference"] = st.text_input("Référence de commande",
-                                                            value=st.session_state.commande_info["reference"])
-st.session_state.commande_info["couleur"] = st.text_input("Couleur (ex : Blanc RAL 9010)",
-                                                          value=st.session_state.commande_info["couleur"])
-st.session_state.commande_info["face"] = st.selectbox("Face laquée", ["Intérieure", "Extérieure", "Deux faces"],
-                                                      index=["Intérieure", "Extérieure", "Deux faces"].index(
-                                                          st.session_state.commande_info["face"]))
+st.session_state.commande_info["reference"] = st.text_input("Référence de commande", value=st.session_state.commande_info["reference"])
+st.session_state.commande_info["couleur"] = st.text_input("Couleur (ex : Blanc RAL 9010)", value=st.session_state.commande_info["couleur"])
+st.session_state.commande_info["face"] = st.selectbox("Face laquée", ["Intérieure", "Extérieure", "Deux faces"], index=["Intérieure", "Extérieure", "Deux faces"].index(st.session_state.commande_info["face"]))
 
 st.subheader("Ajouter une pièce")
 
@@ -34,9 +30,11 @@ with st.form("ajout_piece"):
     if type_piece == "Cornière égale":
         a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=50)
         b = a
+        c = None
     elif type_piece == "Cornière inégale":
         a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=40)
         b = st.number_input("Aile B (mm)", min_value=10, max_value=1000, value=60)
+        c = None
     else:  # Profil Z
         a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=30)
         b = st.number_input("Aile B (mm)", min_value=10, max_value=1000, value=50)
@@ -53,7 +51,7 @@ with st.form("ajout_piece"):
             "type": type_piece,
             "A": a,
             "B": b,
-            "C": c if type_piece == "Profil Z" else None,
+            "C": c,
             "epaisseur": epaisseur,
             "longueur": longueur,
             "quantite": quantite,
@@ -78,37 +76,34 @@ for i, piece in enumerate(st.session_state.pieces):
             st.session_state.pieces.pop(i)
             st.experimental_rerun()
 
-
 # Fonctions de dessin
 
 def dessiner_piece(piece):
-    fig, ax = plt.subplots(figsize=(4, 4))
+    fig, ax = plt.subplots(figsize=(3, 2.5))
     a, b, c = piece["A"], piece["B"], piece.get("C")
     ep = piece["epaisseur"]
 
-    if piece["type"] == "Cornière égale" or piece["type"] == "Cornière inégale":
+    if piece["type"] in ["Cornière égale", "Cornière inégale"]:
         ax.plot([0, 0, ep, ep, a, a, 0], [0, b, b, ep, ep, 0, 0], color="black")
-        ax.text(a / 2, -5, f"A = {a} mm", ha="center", va="top")
-        ax.text(-5, b / 2, f"B = {b} mm", ha="right", va="center", rotation=90)
+        ax.text(a / 2, -3, f"A = {a} mm", ha="center", va="top", fontsize=8)
+        ax.text(-3, b / 2, f"B = {b} mm", ha="right", va="center", rotation=90, fontsize=8)
     elif piece["type"] == "Profil Z":
-        # Profil Z simplifié : 3 segments à 90°
-        ax.plot([0, 0, ep, ep, a, a, a + ep, a + ep, a + b, a + b, a + b + ep, a + b + ep, a + b + ep, 0],
-                [0, c, c, c + ep, c + ep, c + ep - c, c + ep - c, c + ep - c + b, c + ep - c + b, c + ep - c + b + ep,
-                 c + ep - c + b + ep, 0, 0, 0], color="black")
-        ax.text(a / 2, -5, f"A = {a} mm", ha="center")
-        ax.text(a + b / 2, -5, f"B = {b} mm", ha="center")
-        ax.text(-5, c / 2, f"C = {c} mm", ha="right", rotation=90)
+        # Tracé d’un Z : ailes a, b, c séparées par épaisseurs
+        x = [0, a, a, a + ep, a + ep, a + b, a + b, a + b + ep, a + b + ep, a + b + ep + c, a + b + ep + c, 0, 0]
+        y = [0, 0, ep, ep, -b, -b, -b - ep, -b - ep, -b - ep + ep, -b - ep + ep, 0, 0, 0]
+        ax.plot(x, y, color="black")
+        ax.text(a / 2, 3, f"A = {a} mm", ha="center", va="bottom", fontsize=8)
+        ax.text(a + b / 2, -b / 2, f"B = {b} mm", ha="center", va="center", fontsize=8)
+        ax.text(a + b + c / 2, 3, f"C = {c} mm", ha="center", va="bottom", fontsize=8)
 
     ax.set_aspect('equal')
     ax.axis('off')
     st.pyplot(fig)
     return fig
 
-
 if st.session_state.pieces:
     st.subheader("Aperçu du dernier dessin")
     dessiner_piece(st.session_state.pieces[-1])
-
 
 # PDF Export
 
@@ -123,8 +118,9 @@ def export_pdf(pieces):
         pdf.ln(5)
         pdf.cell(200, 10, txt=f"Référence : {st.session_state.commande_info['reference']}", ln=True)
         pdf.cell(200, 10, txt=f"Type : {piece['type']}", ln=True)
-        pdf.cell(200, 10, txt=f"Dimensions : A={piece['A']} mm, B={piece['B']} mm" + (
-            f", C={piece['C']} mm" if piece['C'] else ""), ln=True)
+        dims = f"A={piece['A']} mm, B={piece['B']} mm"
+        if piece['C']: dims += f", C={piece['C']} mm"
+        pdf.cell(200, 10, txt=f"Dimensions : {dims}", ln=True)
         pdf.cell(200, 10, txt=f"Longueur : {piece['longueur']} mm, Épaisseur : {piece['epaisseur']} mm", ln=True)
         pdf.cell(200, 10, txt=f"Quantité : {piece['quantite']}", ln=True)
         pdf.cell(200, 10, txt=f"Couleur : {piece['couleur']}, Face laquée : {piece['face']}", ln=True)
@@ -139,7 +135,6 @@ def export_pdf(pieces):
     tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf.output(tmp_pdf.name)
     return tmp_pdf.name
-
 
 if st.button("📄 Exporter en PDF"):
     if st.session_state.pieces:

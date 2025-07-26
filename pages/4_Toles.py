@@ -4,68 +4,114 @@ from fpdf import FPDF
 import tempfile
 import os
 
-# Stockage des pièces en session
+# Stockage des données en session
 if "pieces" not in st.session_state:
     st.session_state.pieces = []
+if "commande_info" not in st.session_state:
+    st.session_state.commande_info = {
+        "reference": "",
+        "couleur": "",
+        "face": "Intérieure"
+    }
 
-st.title("Commande de Tôles Pliées - Cornières Égales")
+st.title("Commande de Tôles Pliées")
 
-st.subheader("Ajouter une cornière égale")
+st.subheader("Informations générales")
 
-with st.form("ajout_corniere"):
-    a = st.number_input("Largeur aile A (mm)", min_value=10, max_value=1000, value=50)
+st.session_state.commande_info["reference"] = st.text_input("Référence de commande",
+                                                            value=st.session_state.commande_info["reference"])
+st.session_state.commande_info["couleur"] = st.text_input("Couleur (ex : Blanc RAL 9010)",
+                                                          value=st.session_state.commande_info["couleur"])
+st.session_state.commande_info["face"] = st.selectbox("Face laquée", ["Intérieure", "Extérieure", "Deux faces"],
+                                                      index=["Intérieure", "Extérieure", "Deux faces"].index(
+                                                          st.session_state.commande_info["face"]))
+
+st.subheader("Ajouter une pièce")
+
+with st.form("ajout_piece"):
+    type_piece = st.selectbox("Type de profil", ["Cornière égale", "Cornière inégale", "Profil Z"])
+
+    if type_piece == "Cornière égale":
+        a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=50)
+        b = a
+    elif type_piece == "Cornière inégale":
+        a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=40)
+        b = st.number_input("Aile B (mm)", min_value=10, max_value=1000, value=60)
+    else:  # Profil Z
+        a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=30)
+        b = st.number_input("Aile B (mm)", min_value=10, max_value=1000, value=50)
+        c = st.number_input("Aile C (mm)", min_value=10, max_value=1000, value=30)
+
     epaisseur = st.number_input("Épaisseur (mm)", min_value=1.0, max_value=20.0, value=2.0, step=0.5)
     longueur = st.number_input("Longueur (mm)", min_value=100, max_value=6000, value=1000)
     quantite = st.number_input("Quantité", min_value=1, max_value=100, value=1)
+
     submitted = st.form_submit_button("Ajouter")
 
     if submitted:
-        st.session_state.pieces.append({
-            "type": "cornière égale",
+        piece = {
+            "type": type_piece,
             "A": a,
-            "épaisseur": epaisseur,
+            "B": b,
+            "C": c if type_piece == "Profil Z" else None,
+            "epaisseur": epaisseur,
             "longueur": longueur,
-            "quantité": quantite
-        })
-        st.success("Cornière ajoutée à la commande.")
+            "quantite": quantite,
+            "couleur": st.session_state.commande_info["couleur"],
+            "face": st.session_state.commande_info["face"]
+        }
+        st.session_state.pieces.append(piece)
+        st.success("Pièce ajoutée à la commande.")
 
 st.subheader("Commande en cours")
 
 for i, piece in enumerate(st.session_state.pieces):
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
-        st.text(
-            f"{piece['quantité']}x Cornière égale {piece['A']}x{piece['A']}x{piece['longueur']} mm (ép. {piece['épaisseur']} mm)")
+        desc = f"{piece['quantite']}x {piece['type']} - A={piece['A']} B={piece['B']}"
+        if piece['type'] == "Profil Z":
+            desc += f" C={piece['C']}"
+        desc += f" L={piece['longueur']} mm, ép. {piece['epaisseur']} mm - {piece['couleur']} - {piece['face']}"
+        st.text(desc)
     with col2:
-        if st.button("Supprimer", key=f"supprimer_{i}"):
+        if st.button("Supprimer", key=f"suppr_{i}"):
             st.session_state.pieces.pop(i)
             st.experimental_rerun()
 
 
-def dessiner_corniere(a, epaisseur):
+# Fonctions de dessin
+
+def dessiner_piece(piece):
     fig, ax = plt.subplots(figsize=(4, 4))
-    # Tracé d'une cornière égale en L
-    ax.plot([0, 0, epaisseur, epaisseur, a, a, 0], [0, a, a, epaisseur, epaisseur, 0, 0], color="black")
+    a, b, c = piece["A"], piece["B"], piece.get("C")
+    ep = piece["epaisseur"]
+
+    if piece["type"] == "Cornière égale" or piece["type"] == "Cornière inégale":
+        ax.plot([0, 0, ep, ep, a, a, 0], [0, b, b, ep, ep, 0, 0], color="black")
+        ax.text(a / 2, -5, f"A = {a} mm", ha="center", va="top")
+        ax.text(-5, b / 2, f"B = {b} mm", ha="right", va="center", rotation=90)
+    elif piece["type"] == "Profil Z":
+        # Profil Z simplifié : 3 segments à 90°
+        ax.plot([0, 0, ep, ep, a, a, a + ep, a + ep, a + b, a + b, a + b + ep, a + b + ep, a + b + ep, 0],
+                [0, c, c, c + ep, c + ep, c + ep - c, c + ep - c, c + ep - c + b, c + ep - c + b, c + ep - c + b + ep,
+                 c + ep - c + b + ep, 0, 0, 0], color="black")
+        ax.text(a / 2, -5, f"A = {a} mm", ha="center")
+        ax.text(a + b / 2, -5, f"B = {b} mm", ha="center")
+        ax.text(-5, c / 2, f"C = {c} mm", ha="right", rotation=90)
+
     ax.set_aspect('equal')
-    ax.set_xlim(-10, a + 20)
-    ax.set_ylim(-10, a + 20)
     ax.axis('off')
-    # Cotes
-    ax.text(a / 2, -5, f"A = {a} mm", ha="center", va="top")
-    ax.text(-5, a / 2, f"A = {a} mm", ha="right", va="center", rotation=90)
-    ax.text(a + 5, epaisseur / 2, f"ép. = {epaisseur} mm", va="center")
     st.pyplot(fig)
     return fig
 
 
-st.subheader("Aperçu du dessin")
-
 if st.session_state.pieces:
-    dernier = st.session_state.pieces[-1]
-    dessiner_corniere(dernier["A"], dernier["épaisseur"])
+    st.subheader("Aperçu du dernier dessin")
+    dessiner_piece(st.session_state.pieces[-1])
 
 
-# PDF export
+# PDF Export
+
 def export_pdf(pieces):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -73,30 +119,33 @@ def export_pdf(pieces):
     for piece in pieces:
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Commande de Tôle Pliée - Cornière Égale", ln=True, align='C')
-        pdf.ln(10)
-        pdf.cell(200, 10,
-                 txt=f"{piece['quantité']}x Cornière {piece['A']}x{piece['A']}x{piece['longueur']} mm (ép. {piece['épaisseur']} mm)",
-                 ln=True)
+        pdf.cell(200, 10, txt="Commande de Tôle Pliée", ln=True, align='C')
+        pdf.ln(5)
+        pdf.cell(200, 10, txt=f"Référence : {st.session_state.commande_info['reference']}", ln=True)
+        pdf.cell(200, 10, txt=f"Type : {piece['type']}", ln=True)
+        pdf.cell(200, 10, txt=f"Dimensions : A={piece['A']} mm, B={piece['B']} mm" + (
+            f", C={piece['C']} mm" if piece['C'] else ""), ln=True)
+        pdf.cell(200, 10, txt=f"Longueur : {piece['longueur']} mm, Épaisseur : {piece['epaisseur']} mm", ln=True)
+        pdf.cell(200, 10, txt=f"Quantité : {piece['quantite']}", ln=True)
+        pdf.cell(200, 10, txt=f"Couleur : {piece['couleur']}, Face laquée : {piece['face']}", ln=True)
 
-        # Dessin temporaire
-        fig = dessiner_corniere(piece["A"], piece["épaisseur"])
+        fig = dessiner_piece(piece)
         tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
         fig.savefig(tmpfile.name)
         plt.close(fig)
-        pdf.image(tmpfile.name, x=30, y=50, w=120)
+        pdf.image(tmpfile.name, x=30, y=80, w=140)
         os.unlink(tmpfile.name)
 
-    temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(temp_pdf.name)
-    return temp_pdf.name
+    tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(tmp_pdf.name)
+    return tmp_pdf.name
 
 
 if st.button("📄 Exporter en PDF"):
     if st.session_state.pieces:
         pdf_path = export_pdf(st.session_state.pieces)
         with open(pdf_path, "rb") as f:
-            st.download_button("Télécharger le PDF", data=f, file_name="commande_cornieres.pdf", mime="application/pdf")
+            st.download_button("Télécharger le PDF", data=f, file_name="commande_toles.pdf", mime="application/pdf")
         os.remove(pdf_path)
     else:
         st.warning("Aucune pièce à exporter.")

@@ -1,25 +1,44 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 import ezdxf
 import numpy as np
 import tempfile
+import plotly.graph_objects as go
 
-def plot_dxf_file(file_path):
-    doc = ezdxf.readfile(file_path)
+def get_layers(doc):
     msp = doc.modelspace()
+    return sorted(set(entity.dxf.layer for entity in msp))
 
-    fig, ax = plt.subplots()
+def plot_dxf_interactive(doc, selected_layers):
+    msp = doc.modelspace()
+    fig = go.Figure()
 
     for entity in msp:
+        if entity.dxf.layer not in selected_layers:
+            continue
+
         if entity.dxftype() == "LINE":
             start = entity.dxf.start
             end = entity.dxf.end
-            ax.plot([start.x, end.x], [start.y, end.y], 'b-')
+            fig.add_trace(go.Scatter(
+                x=[start.x, end.x], y=[start.y, end.y],
+                mode='lines',
+                line=dict(color='blue'),
+                name='LINE',
+                showlegend=False
+            ))
         elif entity.dxftype() == "CIRCLE":
             center = entity.dxf.center
             radius = entity.dxf.radius
-            circle = plt.Circle((center.x, center.y), radius, fill=False, color='green')
-            ax.add_patch(circle)
+            theta = np.linspace(0, 2*np.pi, 100)
+            x = center.x + radius * np.cos(theta)
+            y = center.y + radius * np.sin(theta)
+            fig.add_trace(go.Scatter(
+                x=x, y=y,
+                mode='lines',
+                line=dict(color='green'),
+                name='CIRCLE',
+                showlegend=False
+            ))
         elif entity.dxftype() == "ARC":
             center = entity.dxf.center
             radius = entity.dxf.radius
@@ -28,7 +47,13 @@ def plot_dxf_file(file_path):
             theta = np.linspace(start_angle, end_angle, 100)
             x = center.x + radius * np.cos(theta)
             y = center.y + radius * np.sin(theta)
-            ax.plot(x, y, 'r-')
+            fig.add_trace(go.Scatter(
+                x=x, y=y,
+                mode='lines',
+                line=dict(color='red'),
+                name='ARC',
+                showlegend=False
+            ))
         elif entity.dxftype() in ["LWPOLYLINE", "POLYLINE"]:
             try:
                 points = entity.get_points()
@@ -36,27 +61,71 @@ def plot_dxf_file(file_path):
             except AttributeError:
                 points = [(v.dxf.x, v.dxf.y) for v in entity.vertices()]
             x, y = zip(*points)
-            ax.plot(x, y, 'm-')
+            fig.add_trace(go.Scatter(
+                x=x, y=y,
+                mode='lines',
+                line=dict(color='magenta'),
+                name='POLYLINE',
+                showlegend=False
+            ))
+        elif entity.dxftype() == "TEXT":
+            insert = entity.dxf.insert
+            content = entity.dxf.text
+            fig.add_trace(go.Scatter(
+                x=[insert.x],
+                y=[insert.y],
+                mode="text",
+                text=[content],
+                textposition="top right",
+                textfont=dict(size=12, color="black"),
+                showlegend=False
+            ))
+        elif entity.dxftype() == "MTEXT":
+            insert = entity.dxf.insert
+            content = entity.text
+            fig.add_trace(go.Scatter(
+                x=[insert.x],
+                y=[insert.y],
+                mode="text",
+                text=[content],
+                textposition="top right",
+                textfont=dict(size=12, color="black"),
+                showlegend=False
+            ))
 
-    ax.set_aspect('equal')
-    ax.set_title("Aperçu du fichier DXF")
-    ax.grid(True)
+    fig.update_layout(
+        title="DXF interactif (zoom/pan)",
+        xaxis=dict(scaleanchor="y"),
+        yaxis=dict(scaleanchor="x"),
+        dragmode="pan",
+        margin=dict(l=10, r=10, t=40, b=10)
+    )
+
     return fig
 
 def main():
-    st.title("📐 Visionneuse DXF simple")
+    st.title("📐 Visionneuse DXF interactive (zoom & pan)")
 
     uploaded_file = st.file_uploader("Chargez un fichier DXF", type=["dxf"])
 
     if uploaded_file is not None:
-        # Enregistrement temporaire pour lecture par ezdxf
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_file:
             tmp_file.write(uploaded_file.read())
             tmp_path = tmp_file.name
 
         try:
-            fig = plot_dxf_file(tmp_path)
-            st.pyplot(fig)
+            doc = ezdxf.readfile(tmp_path)
+            layers = get_layers(doc)
+
+            st.markdown("### Calques à afficher")
+            selected_layers = st.multiselect("Sélectionnez les calques à afficher :", layers, default=layers)
+
+            if selected_layers:
+                fig = plot_dxf_interactive(doc, selected_layers)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Aucun calque sélectionné.")
+
         except Exception as e:
             st.error(f"Erreur : {e}")
 

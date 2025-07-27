@@ -5,3 +5,4 @@ reportlab
 numpy
 ezdxf
 fpdf2
+plotly

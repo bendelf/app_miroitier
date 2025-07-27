@@ -5,8 +5,8 @@ from fpdf import FPDF
 import os
 
 # À faire une seule fois au début
-font_bold = ImageFont.truetype("arial.ttf", 14)
-font = ImageFont.truetype("arial.ttf", 12)
+#font_bold = ImageFont.truetype("arial.ttf", 14)
+#font = ImageFont.truetype("arial.ttf", 12)
 
 st.set_page_config(page_title="Commande de Tôles", layout="wide")
 
@@ -128,7 +128,7 @@ def dessiner_schema(tole):
         text_centered(f"C={d['C']}", x0 + B + 5, y0 + d["C"] // 2)
 
     text = f"Laquage côté {tole['laquage']}"
-    draw.text((10, 180), text, font=font_bold, fill="red")  # position bas gauche
+    draw.text((10, 180), text, fill="red")  # position bas gauche
 
     return img
 

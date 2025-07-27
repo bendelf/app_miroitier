@@ -1,146 +1,197 @@
 import streamlit as st
-import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont
+import io
 from fpdf import FPDF
-import tempfile
 import os
 
-# Stockage des données en session
-if "pieces" not in st.session_state:
-    st.session_state.pieces = []
-if "commande_info" not in st.session_state:
-    st.session_state.commande_info = {
-        "reference": "",
-        "couleur": "",
-        "face": "Intérieure"
-    }
+# À faire une seule fois au début
+font_bold = ImageFont.truetype("arial.ttf", 14)
+font = ImageFont.truetype("arial.ttf", 12)
 
-st.title("Commande de Tôles Pliées")
+st.set_page_config(page_title="Commande de Tôles", layout="wide")
 
-st.subheader("Informations générales")
+# --- Stockage temporaire ---
+if "toles" not in st.session_state:
+    st.session_state["toles"] = []
 
-st.session_state.commande_info["reference"] = st.text_input("Référence de commande", value=st.session_state.commande_info["reference"])
-st.session_state.commande_info["couleur"] = st.text_input("Couleur (ex : Blanc RAL 9010)", value=st.session_state.commande_info["couleur"])
-st.session_state.commande_info["face"] = st.selectbox("Face laquée", ["Intérieure", "Extérieure", "Deux faces"], index=["Intérieure", "Extérieure", "Deux faces"].index(st.session_state.commande_info["face"]))
+# --- Infos générales ---
+st.title("Commande de Tôles")
 
-st.subheader("Ajouter une pièce")
+col1, col2 = st.columns(2)
+with col1:
+    fournisseur = st.text_input("Fournisseur")
+with col2:
+    reference_chantier = st.text_input("Référence chantier")
 
-with st.form("ajout_piece"):
-    type_piece = st.selectbox("Type de profil", ["Cornière égale", "Cornière inégale", "Profil Z"])
+st.markdown("---")
 
-    if type_piece == "Cornière égale":
-        a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=50)
-        b = a
-        c = None
-    elif type_piece == "Cornière inégale":
-        a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=40)
-        b = st.number_input("Aile B (mm)", min_value=10, max_value=1000, value=60)
-        c = None
-    else:  # Profil Z
-        a = st.number_input("Aile A (mm)", min_value=10, max_value=1000, value=30)
-        b = st.number_input("Aile B (mm)", min_value=10, max_value=1000, value=50)
-        c = st.number_input("Aile C (mm)", min_value=10, max_value=1000, value=30)
+# --- Ajout d'une tôle ---
+st.header("Ajouter une tôle")
 
-    epaisseur = st.number_input("Épaisseur (mm)", min_value=1.0, max_value=20.0, value=2.0, step=0.5)
-    longueur = st.number_input("Longueur (mm)", min_value=100, max_value=6000, value=1000)
-    quantite = st.number_input("Quantité", min_value=1, max_value=100, value=1)
+col1, col2, col3 = st.columns(3)
+with col1:
+    metal = st.selectbox("Type de métal", ["Aluminium", "Acier", "Inox"])
+    epaisseur = st.selectbox("Épaisseur (mm)", ["15/10ème", "20/10ème", "30/10ème"])
+    forme = st.selectbox("Forme", ["Cornière", "Profil Z", "Seuil", "Tôle en U"])
+with col2:
+    coloris = st.text_input("Coloris")
+    laquage = st.selectbox("Côté laquage", ["Extérieur", "Intérieur"])
+    finition = st.selectbox("Finition", ["Satiné", "Brillant", "Mat", "Texturé", "Autre"])
+with col3:
+    quantite = st.number_input("Quantité", min_value=1, step=1)
+    longueur = st.number_input("Longueur (mm)", min_value=10, step=10)
+    note = st.text_input("Note")
 
-    submitted = st.form_submit_button("Ajouter")
+note_finition = ""
+if finition == "Autre":
+    note_finition = st.text_input("Précisez la finition")
 
-    if submitted:
-        piece = {
-            "type": type_piece,
-            "A": a,
-            "B": b,
-            "C": c,
-            "epaisseur": epaisseur,
-            "longueur": longueur,
-            "quantite": quantite,
-            "couleur": st.session_state.commande_info["couleur"],
-            "face": st.session_state.commande_info["face"]
-        }
-        st.session_state.pieces.append(piece)
-        st.success("Pièce ajoutée à la commande.")
+# --- Dimensions ---
+dimensions = {}
+if forme in ["Cornière", "Cornière"]:
+    dimensions["A"] = st.number_input("A (mm)", min_value=10, value=50)
+    dimensions["B"] = st.number_input("B (mm)", min_value=10, value=70)
+elif forme == "Profil Z":
+    dimensions["A"] = st.number_input("A (mm)", min_value=10, value=50)
+    dimensions["B"] = st.number_input("B (mm)", min_value=10, value=30)
+    dimensions["C"] = st.number_input("C (mm)", min_value=10, value=70)
+elif forme == "Seuil":
+    dimensions["Largeur"] = st.number_input("Largeur (mm)", min_value=10, value=50)
+    dimensions["Hauteur"] = st.number_input("Hauteur (mm)", min_value=10, value=30)
+elif forme == "Tôle en U":
+    dimensions["A"] = st.number_input("A (mm)", min_value=10, value=50)
+    dimensions["B"] = st.number_input("B (mm)", min_value=10, value=40)
+    dimensions["C"] = st.number_input("C (mm)", min_value=10, value=70)
 
-st.subheader("Commande en cours")
+if st.button("Ajouter la tôle"):
+    st.session_state["toles"].append({
+        "metal": metal,
+        "epaisseur": epaisseur,
+        "coloris": coloris,
+        "laquage": laquage,
+        "finition": finition,
+        "note_finition": note_finition,
+        "forme": forme,
+        "dimensions": dimensions.copy(),
+        "quantite": quantite,
+        "longueur": longueur,
+        "note": note
+    })
 
-for i, piece in enumerate(st.session_state.pieces):
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        desc = f"{piece['quantite']}x {piece['type']} - A={piece['A']} B={piece['B']}"
-        if piece['type'] == "Profil Z":
-            desc += f" C={piece['C']}"
-        desc += f" L={piece['longueur']} mm, ép. {piece['epaisseur']} mm - {piece['couleur']} - {piece['face']}"
-        st.text(desc)
-    with col2:
-        if st.button("Supprimer", key=f"suppr_{i}"):
-            st.session_state.pieces.pop(i)
-            st.experimental_rerun()
+# --- Dessin ---
+def dessiner_schema(tole):
+    img = Image.new("RGB", (300, 200), "white")
+    draw = ImageDraw.Draw(img)
 
-# Fonctions de dessin
+    def mm(x): return int(x * 1.5)
+    def text_centered(text, x, y): draw.text((x, y), text, fill="black")
 
-def dessiner_piece(piece):
-    fig, ax = plt.subplots(figsize=(3, 2.5))
-    a, b, c = piece["A"], piece["B"], piece.get("C")
-    ep = piece["epaisseur"]
+    forme = tole["forme"]
+    d = tole["dimensions"]
 
-    if piece["type"] in ["Cornière égale", "Cornière inégale"]:
-        ax.plot([0, 0, ep, ep, a, a, 0], [0, b, b, ep, ep, 0, 0], color="black")
-        ax.text(a / 2, -3, f"A = {a} mm", ha="center", va="top", fontsize=8)
-        ax.text(-3, b / 2, f"B = {b} mm", ha="right", va="center", rotation=90, fontsize=8)
-    elif piece["type"] == "Profil Z":
-        # Tracé d’un Z : ailes a, b, c séparées par épaisseurs
-        x = [0, a, a, a + ep, a + ep, a + b, a + b, a + b + ep, a + b + ep, a + b + ep + c, a + b + ep + c, 0, 0]
-        y = [0, 0, ep, ep, -b, -b, -b - ep, -b - ep, -b - ep + ep, -b - ep + ep, 0, 0, 0]
-        ax.plot(x, y, color="black")
-        ax.text(a / 2, 3, f"A = {a} mm", ha="center", va="bottom", fontsize=8)
-        ax.text(a + b / 2, -b / 2, f"B = {b} mm", ha="center", va="center", fontsize=8)
-        ax.text(a + b + c / 2, 3, f"C = {c} mm", ha="center", va="bottom", fontsize=8)
+    if forme == "Cornière":
+        A, B = mm(d["A"]), mm(d["B"])
+        draw.line([(50, 50), (50 + A, 50)], fill="black", width=2)
+        draw.line([(50, 50), (50, 50 + B)], fill="black", width=2)
+        text_centered(f"A={d['A']}", 50 + A // 2 - 15, 35)
+        text_centered(f"B={d['B']}", 20, 50 + B // 2 - 5)
 
-    ax.set_aspect('equal')
-    ax.axis('off')
-    st.pyplot(fig)
-    return fig
+    elif forme == "Profil Z":
+        A, B, C = mm(d["A"]), mm(d["B"]), mm(d["C"])
+        x0, y0 = 50, 100
+        path = [
+            (x0, y0),
+            (x0 + A, y0),
+            (x0 + A, y0 - B),
+            (x0 + A + C, y0 - B)
+        ]
+        draw.line(path, fill="black", width=2)
+        text_centered(f"A={d['A']}", x0 + A // 2 - 10, y0 + 10)
+        text_centered(f"B={d['B']}", x0 + A + 5, y0 - B // 2 - 5)
+        text_centered(f"C={d['C']}", x0 + A + C // 2 - 10, y0 - B - 15)
 
-if st.session_state.pieces:
-    st.subheader("Aperçu du dernier dessin")
-    dessiner_piece(st.session_state.pieces[-1])
+    elif forme == "Seuil":
+        L, H = mm(d["Largeur"]), mm(d["Hauteur"])
+        x0, y0 = 50, 80
+        draw.rectangle([x0, y0, x0 + L, y0 + H], outline="black", width=2)
+        text_centered(f"Largeur={d['Largeur']}", x0 + L // 2 - 20, y0 - 15)
+        text_centered(f"Hauteur={d['Hauteur']}", x0 - 40, y0 + H // 2 - 5)
 
-# PDF Export
+    elif forme == "Tôle en U":
+        A, B, C = mm(d["A"]), mm(d["B"]), mm(d["C"])
+        x0, y0 = 50, 60
+        draw.line([(x0, y0), (x0, y0 + A)], fill="black", width=2)
+        draw.line([(x0, y0 + A), (x0 + B, y0 + A)], fill="black", width=2)
+        draw.line([(x0 + B, y0 + A), (x0 + B, y0+A-C)], fill="black", width=2)
+        text_centered(f"A={d['A']}", x0 - 35, y0 + A // 2 - 5)
+        text_centered(f"B={d['B']}", x0 + B // 2 - 10, y0 + A + 5)
+        text_centered(f"C={d['C']}", x0 + B + 5, y0 + d["C"] // 2)
 
-def export_pdf(pieces):
+    text = f"Laquage côté {tole['laquage']}"
+    draw.text((10, 180), text, font=font_bold, fill="red")  # position bas gauche
+
+    return img
+
+# --- Liste des tôles ---
+st.markdown("## Tôles ajoutées")
+for i, tole in enumerate(st.session_state["toles"]):
+    finition_txt = tole['note_finition'] if tole['finition'] == "Autre" else tole['finition']
+    cols = st.columns([3, 1, 1])
+    with cols[0]:
+        st.write(
+            f"🔹 {tole['forme']} - {tole['metal']} {tole['epaisseur']} - "
+            f"{tole['coloris']} ({tole['laquage']} - {finition_txt}) - "
+            f"{tole['quantite']}x{tole['longueur']}mm"
+        )
+        st.write(f"Dimensions : {tole['dimensions']}")
+    with cols[1]:
+        img = dessiner_schema(tole)
+        st.image(img, use_container_width=True)
+    with cols[2]:
+        if st.button("❌ Supprimer", key=f"delete_{i}"):
+            st.session_state["toles"].pop(i)
+            st.session_state["refresh"] = not st.session_state.get("refresh", False)  # toggle un booléen
+
+# --- PDF ---
+import tempfile
+
+def generer_pdf():
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, f"Fournisseur : {fournisseur}", ln=True)
+    pdf.cell(200, 10, f"Référence chantier : {reference_chantier}", ln=True)
+    pdf.ln(10)
 
-    for piece in pieces:
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt="Commande de Tôle Pliée", ln=True, align='C')
-        pdf.ln(5)
-        pdf.cell(200, 10, txt=f"Référence : {st.session_state.commande_info['reference']}", ln=True)
-        pdf.cell(200, 10, txt=f"Type : {piece['type']}", ln=True)
-        dims = f"A={piece['A']} mm, B={piece['B']} mm"
-        if piece['C']: dims += f", C={piece['C']} mm"
-        pdf.cell(200, 10, txt=f"Dimensions : {dims}", ln=True)
-        pdf.cell(200, 10, txt=f"Longueur : {piece['longueur']} mm, Épaisseur : {piece['epaisseur']} mm", ln=True)
-        pdf.cell(200, 10, txt=f"Quantité : {piece['quantite']}", ln=True)
-        pdf.cell(200, 10, txt=f"Couleur : {piece['couleur']}, Face laquée : {piece['face']}", ln=True)
+    temp_dir = tempfile.gettempdir()
 
-        fig = dessiner_piece(piece)
-        tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        fig.savefig(tmpfile.name)
-        plt.close(fig)
-        pdf.image(tmpfile.name, x=30, y=80, w=140)
-        os.unlink(tmpfile.name)
+    for idx, tole in enumerate(st.session_state["toles"]):
+        finition_txt = tole['note_finition'] if tole['finition'] == "Autre" else tole['finition']
 
-    tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(tmp_pdf.name)
-    return tmp_pdf.name
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(200, 10, f"Tôle {idx+1} - {tole['forme']}", ln=True)
+        pdf.set_font("Arial", size=11)
+        pdf.multi_cell(0, 8,
+            f"Métal : {tole['metal']}\n"
+            f"Épaisseur : {tole['epaisseur']} \n"
+            f"Coloris : {tole['coloris']}\n"
+            f"Laquage : {tole['laquage']}\n"
+            f"Finition : {finition_txt}\n"
+            f"Dimensions : {tole['dimensions']}\n"
+            f"Quantité : {tole['quantite']} x {tole['longueur']} mm\n"
+            f"Note : {tole['note']}\n"
+        )
+
+        img = dessiner_schema(tole)
+        img_path = os.path.join(temp_dir, f"tole_{idx}.png")
+        img.save(img_path)
+        pdf.image(img_path, w=100)
+        pdf.ln(10)
+        os.remove(img_path)
+
+    return pdf.output(dest="S").encode("latin1")
+
 
 if st.button("📄 Exporter en PDF"):
-    if st.session_state.pieces:
-        pdf_path = export_pdf(st.session_state.pieces)
-        with open(pdf_path, "rb") as f:
-            st.download_button("Télécharger le PDF", data=f, file_name="commande_toles.pdf", mime="application/pdf")
-        os.remove(pdf_path)
-    else:
-        st.warning("Aucune pièce à exporter.")
+    pdf_data = generer_pdf()
+    st.download_button("Télécharger le PDF", data=pdf_data, file_name="commande_tole.pdf", mime="application/pdf")

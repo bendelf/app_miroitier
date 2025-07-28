@@ -271,7 +271,8 @@ def main():
         "Trapèze isocèle",
         "Trapèze rectangle",
         "Parallélogramme",
-        "Quadrilatère général"
+        "Quadrilatère général",
+        "Charger un DXF"
     ])
 
     points = []
@@ -332,6 +333,36 @@ def main():
             st.success("✅ La figure se ferme correctement.")
         else:
             st.error(f"❌ La figure ne se ferme pas (écart de {ecart:.2f} unités).")
+
+    elif forme == "Charger un DXF":
+        uploaded_file = st.file_uploader("Chargez un fichier DXF", type=["dxf"])
+        if uploaded_file is not None:
+            try:
+                doc = ezdxf.read(stream=uploaded_file.read())
+                msp = doc.modelspace()
+                entities = []
+
+                for e in msp:
+                    if e.dxftype() in ["LWPOLYLINE", "POLYLINE"]:
+                        points = [(v[0], v[1]) for v in e.get_points()]
+                        if e.closed:
+                            entities.append(points)
+                    elif e.dxftype() == "LINE":
+                        start = e.dxf.start
+                        end = e.dxf.end
+                        entities.append([start[:2], end[:2]])
+
+                # Fusionner tous les points s'il y a plusieurs entités
+                all_points = [pt for entity in entities for pt in entity]
+                if len(all_points) >= 3:
+                    points = all_points
+                    attributs = {"Source DXF": "Oui"}
+                else:
+                    st.warning("Aucune forme exploitable trouvée dans le fichier DXF.")
+                    points = []
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du fichier DXF : {e}")
+                points = []
 
     if points:
         rect = minimum_bounding_rectangle(points)

@@ -340,17 +340,17 @@ def main():
             try:
                 import io
                 dxf_stream = io.BytesIO(uploaded_file.read())
-                doc = ezdxf.read(dxf_stream)
+                doc = ezdxf.read(stream=dxf_stream)  # ✅ bonne fonction
                 msp = doc.modelspace()
                 entities = []
 
                 for e in msp:
                     if e.dxftype() in ["LWPOLYLINE", "POLYLINE"]:
                         try:
-                            # Pour LWPOLYLINE
+                            # LWPOLYLINE
                             points = [(v[0], v[1]) for v in e.get_points()]
                         except AttributeError:
-                            # Pour POLYLINE (3D parfois)
+                            # POLYLINE (3D)
                             points = [(v.dxf.location.x, v.dxf.location.y) for v in e.vertices()]
                         if e.closed or points[0] == points[-1]:
                             entities.append(points)
@@ -359,7 +359,6 @@ def main():
                         end = e.dxf.end
                         entities.append([start[:2], end[:2]])
 
-                # Fusionner tous les points s'il y a plusieurs entités
                 all_points = [pt for entity in entities for pt in entity]
                 if len(all_points) >= 3:
                     points = all_points

@@ -36,8 +36,8 @@ with col1:
     forme = st.selectbox("Forme", ["Cornière", "Profil Z", "Seuil", "Tôle en U"])
 with col2:
     coloris = st.text_input("Coloris")
-    laquage = st.selectbox("Côté laquage", ["Exterieur", "Interieur", "2 faces"])
-    finition = st.selectbox("Finition", ["Satiné", "Brillant", "Mat", "Texturé", "Autre"])
+    laquage = st.selectbox("Côté laquage", ["Exterieur", "Interieur", "2 faces", "Non laqué"])
+    finition = st.selectbox("Finition", ["Satiné", "Brillant", "Mat", "Texturé", "Brossé", "Brut", "Autre"])
 with col3:
     quantite = st.number_input("Quantité", min_value=1, step=1)
     longueur = st.number_input("Longueur (mm)", min_value=10, step=10)

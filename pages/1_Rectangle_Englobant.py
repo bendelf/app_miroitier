@@ -338,14 +338,21 @@ def main():
         uploaded_file = st.file_uploader("Chargez un fichier DXF", type=["dxf"])
         if uploaded_file is not None:
             try:
-                doc = ezdxf.read(stream=uploaded_file.read())
+                import io
+                dxf_stream = io.BytesIO(uploaded_file.read())
+                doc = ezdxf.read(dxf_stream)
                 msp = doc.modelspace()
                 entities = []
 
                 for e in msp:
                     if e.dxftype() in ["LWPOLYLINE", "POLYLINE"]:
-                        points = [(v[0], v[1]) for v in e.get_points()]
-                        if e.closed:
+                        try:
+                            # Pour LWPOLYLINE
+                            points = [(v[0], v[1]) for v in e.get_points()]
+                        except AttributeError:
+                            # Pour POLYLINE (3D parfois)
+                            points = [(v.dxf.location.x, v.dxf.location.y) for v in e.vertices()]
+                        if e.closed or points[0] == points[-1]:
                             entities.append(points)
                     elif e.dxftype() == "LINE":
                         start = e.dxf.start
@@ -358,8 +365,9 @@ def main():
                     points = all_points
                     attributs = {"Source DXF": "Oui"}
                 else:
-                    st.warning("Aucune forme exploitable trouvée dans le fichier DXF.")
+                    st.warning("Aucune forme fermée trouvée dans le fichier DXF.")
                     points = []
+
             except Exception as e:
                 st.error(f"Erreur lors de la lecture du fichier DXF : {e}")
                 points = []

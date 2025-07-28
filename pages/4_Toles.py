@@ -58,7 +58,6 @@ elif forme == "Profil Z":
     dimensions["C"] = st.number_input("C (mm)", min_value=10, value=70)
 elif forme == "Seuil":
     dimensions["Largeur"] = st.number_input("Largeur (mm)", min_value=10, value=50)
-    dimensions["Hauteur"] = st.number_input("Hauteur (mm)", min_value=10, value=30)
 elif forme == "Tôle en U":
     dimensions["A"] = st.number_input("A (mm)", min_value=10, value=50)
     dimensions["B"] = st.number_input("B (mm)", min_value=10, value=40)
@@ -112,11 +111,13 @@ def dessiner_schema(tole):
         text_centered(f"C={d['C']}", x0 + A + C // 2 - 10, y0 - B - 15)
 
     elif forme == "Seuil":
-        L, H = mm(d["Largeur"]), mm(d["Hauteur"])
+        L = mm(d["Largeur"])
         x0, y0 = 50, 80
-        draw.rectangle([x0, y0, x0 + L, y0 + H], outline="black", width=2)
+        draw.line([x0, y0, x0 + 5, y0 - 4], fill="black", width=2)
+        draw.line([x0 + 5, y0 - 4, x0 + L-5, y0 - 4], fill="black", width=2)
+        draw.line([x0 + L-5, y0 - 4, x0 + L, y0], fill="black", width=2)
         text_centered(f"Largeur={d['Largeur']}", x0 + L // 2 - 20, y0 - 15)
-        text_centered(f"Hauteur={d['Hauteur']}", x0 - 40, y0 + H // 2 - 5)
+        #text_centered(f"Hauteur={d['Hauteur']}", x0 - 40, y0 + H // 2 - 5)
 
     elif forme == "Tôle en U":
         A, B, C = mm(d["A"]), mm(d["B"]), mm(d["C"])

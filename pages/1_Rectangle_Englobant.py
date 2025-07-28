@@ -122,6 +122,68 @@ def construire_quadrilatere_general(ab, bc, cd, da, angle_a_deg, angle_b_deg):
 
     return [A, B, C, D], ferme, ecart, attributs
 
+
+def charger_dxf_points(fichier_dxf, resolution=20):
+    """
+    Lit un fichier DXF et extrait les points de toutes les entités fermées (lignes, polylignes, cercles, arcs).
+    Les arcs et cercles sont approximés par des segments de lignes (resolution = nombre de points pour un cercle complet).
+    """
+    import numpy as np
+    doc = ezdxf.readfile(fichier_dxf)
+    msp = doc.modelspace()
+    points = []
+
+    def arc_to_points(center, radius, start_angle, end_angle, resolution):
+        """Convertit un arc en points (angles en degrés)"""
+        if end_angle < start_angle:
+            end_angle += 360
+        angles = np.radians(
+            np.linspace(start_angle, end_angle, max(2, int(resolution * abs(end_angle - start_angle) / 360))))
+        return [(center[0] + radius * np.cos(a), center[1] + radius * np.sin(a)) for a in angles]
+
+    for ent in msp:
+        if ent.dxftype() == "LWPOLYLINE":
+            pts = [(p[0], p[1]) for p in ent]
+            if ent.is_closed:
+                pts.append(pts[0])
+            points.extend(pts)
+
+        elif ent.dxftype() == "POLYLINE":
+            pts = [(v.dxf.location.x, v.dxf.location.y) for v in ent.vertices()]
+            if ent.is_closed and pts:
+                pts.append(pts[0])
+            points.extend(pts)
+
+        elif ent.dxftype() == "LINE":
+            start = ent.dxf.start
+            end = ent.dxf.end
+            points.extend([(start.x, start.y), (end.x, end.y)])
+
+        elif ent.dxftype() == "CIRCLE":
+            center = ent.dxf.center
+            radius = ent.dxf.radius
+            circle_pts = arc_to_points((center.x, center.y), radius, 0, 360, resolution)
+            points.extend(circle_pts + [circle_pts[0]])
+
+        elif ent.dxftype() == "ARC":
+            center = ent.dxf.center
+            radius = ent.dxf.radius
+            start_angle = ent.dxf.start_angle
+            end_angle = ent.dxf.end_angle
+            arc_pts = arc_to_points((center.x, center.y), radius, start_angle, end_angle, resolution)
+            points.extend(arc_pts)
+
+    # # Tentative de fermeture automatique
+    # if points and math.dist(points[0], points[-1]) > 1e-3:
+    #     points.append(points[0])
+    #
+    # # Vérification : au moins 3 points distincts
+    # unique_pts = list(dict.fromkeys(points))  # enlever doublons
+    # if len(unique_pts) < 3:
+    #     return []
+
+    return points
+
 # --- Calcul du rectangle englobant ---
 def minimum_bounding_rectangle(points):
     poly = Polygon(points)
@@ -335,39 +397,15 @@ def main():
             st.error(f"❌ La figure ne se ferme pas (écart de {ecart:.2f} unités).")
 
     elif forme == "Charger un DXF":
-        uploaded_file = st.file_uploader("Chargez un fichier DXF", type=["dxf"])
-        if uploaded_file is not None:
-            try:
-                doc = ezdxf.read(stream=uploaded_file)  # ✅ CORRECT
-                msp = doc.modelspace()
-                entities = []
-
-                for e in msp:
-                    if e.dxftype() in ["LWPOLYLINE", "POLYLINE"]:
-                        try:
-                            # LWPOLYLINE
-                            points = [(v[0], v[1]) for v in e.get_points()]
-                        except AttributeError:
-                            # POLYLINE (3D)
-                            points = [(v.dxf.location.x, v.dxf.location.y) for v in e.vertices()]
-                        if e.closed or points[0] == points[-1]:
-                            entities.append(points)
-                    elif e.dxftype() == "LINE":
-                        start = e.dxf.start
-                        end = e.dxf.end
-                        entities.append([start[:2], end[:2]])
-
-                all_points = [pt for entity in entities for pt in entity]
-                if len(all_points) >= 3:
-                    points = all_points
-                    attributs = {"Source DXF": "Oui"}
-                else:
-                    st.warning("Aucune forme fermée trouvée dans le fichier DXF.")
-                    points = []
-
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture du fichier DXF : {e}")
-                points = []
+        fichier_dxf = st.file_uploader("Choisir un fichier DXF", type=["dxf"])
+        if fichier_dxf:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+                tmp.write(fichier_dxf.read())
+                tmp_path = tmp.name
+            points = charger_dxf_points(tmp_path)
+            attributs = {"Source": "DXF importé"}
+            if not points:
+                st.warning("❗ Aucun polygone fermé détecté dans le fichier DXF.")
 
     if points:
         rect = minimum_bounding_rectangle(points)

@@ -32,7 +32,7 @@ st.header("Ajouter une tôle")
 col1, col2, col3 = st.columns(3)
 with col1:
     metal = st.selectbox("Type de métal", ["Aluminium", "Acier", "Inox"])
-    epaisseur = st.selectbox("Épaisseur (mm)", ["15/10ème", "20/10ème", "30/10ème"])
+    epaisseur = st.selectbox("Épaisseur (mm)", ["15/10ème", "20/10ème", "30/10ème", "Autre"])
     forme = st.selectbox("Forme", ["Cornière", "Profil Z", "Seuil", "Tôle en U"])
 with col2:
     coloris = st.text_input("Coloris")

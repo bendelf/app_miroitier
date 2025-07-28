@@ -1,8 +1,9 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-import io
 from fpdf import FPDF
 import os
+import io
+from io import BytesIO
 
 # À faire une seule fois au début
 #font_bold = ImageFont.truetype("arial.ttf", 14)
@@ -189,7 +190,10 @@ def generer_pdf():
         pdf.ln(10)
         os.remove(img_path)
 
-    return pdf.output(dest="S").encode("latin1")
+    buffer = BytesIO()
+    pdf.output(buffer)
+    pdf_data = buffer.getvalue()
+    return pdf_data
 
 
 if st.button("📄 Exporter en PDF"):

@@ -338,9 +338,7 @@ def main():
         uploaded_file = st.file_uploader("Chargez un fichier DXF", type=["dxf"])
         if uploaded_file is not None:
             try:
-                import io
-                dxf_stream = io.BytesIO(uploaded_file.read())
-                doc = ezdxf.read(stream=dxf_stream)  # ✅ bonne fonction
+                doc = ezdxf.read(stream=uploaded_file)  # ✅ CORRECT
                 msp = doc.modelspace()
                 entities = []
 

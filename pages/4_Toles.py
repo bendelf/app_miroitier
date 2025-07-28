@@ -40,7 +40,7 @@ with col2:
     finition = st.selectbox("Finition", ["Satiné", "Brillant", "Mat", "Texturé", "Brossé", "Brut", "Autre"])
 with col3:
     quantite = st.number_input("Quantité", min_value=1, step=1)
-    longueur = st.number_input("Longueur (mm)", min_value=10, step=10)
+    longueur = st.number_input("Longueur (mm)", min_value=10, step=1, value=1000)
     note = st.text_input("Note")
 
 note_finition = ""

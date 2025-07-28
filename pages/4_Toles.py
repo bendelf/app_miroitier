@@ -36,7 +36,7 @@ with col1:
     forme = st.selectbox("Forme", ["Cornière", "Profil Z", "Seuil", "Tôle en U"])
 with col2:
     coloris = st.text_input("Coloris")
-    laquage = st.selectbox("Côté laquage", ["Extérieur", "Intérieur", "2 faces"])
+    laquage = st.selectbox("Côté laquage", ["Exterieur", "Interieur", "2 faces"])
     finition = st.selectbox("Finition", ["Satiné", "Brillant", "Mat", "Texturé", "Autre"])
 with col3:
     quantite = st.number_input("Quantité", min_value=1, step=1)
@@ -128,7 +128,7 @@ def dessiner_schema(tole):
         text_centered(f"B={d['B']}", x0 + B // 2 - 10, y0 + A + 5)
         text_centered(f"C={d['C']}", x0 + B + 5, y0 + d["C"] // 2)
 
-    text = f"Laquage côté {tole['laquage']}"
+    text = f"Laquage cote {tole['laquage']}"
     draw.text((10, 180), text, fill="red")  # position bas gauche
 
     return img
